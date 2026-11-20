@@ -1,5 +1,5 @@
 // China Craft Finds — connect your Supabase project in the two lines below.
-const SUPABASE_URL = https://zsrezhqfiqguvikyomuv.supabase.co;
+const SUPABASE_URL = https://zsrezhqfiqguvikyomuv.supabase.co/rest/v1/;
 const SUPABASE_ANON_KEY = sb_publishable_QbLGurjjxRzDnnJmKxzdKA_RrBCwgRd;
 
 const hasConfig = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("YOUR_") && !SUPABASE_ANON_KEY.includes("YOUR_");
