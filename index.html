@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Discover independent Chinese craft makers, tools, molds and handmade supplies.">
+  <title>China Craft Finds — Handmade discoveries from China</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="announcement">Thoughtful craft finds, sourced from China ✦</div>
+  <header class="site-header">
+    <a class="brand" href="#"><span class="brand-mark">✿</span><span>China Craft Finds<small>MADE TO INSPIRE</small></span></a>
+    <nav><a href="#shop">Shop</a><a href="#about">Our story</a><a href="#how">How it works</a></nav>
+    <button class="cart-button" id="open-cart">Bag <span id="cart-count">0</span></button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">A LITTLE WORLD OF MAKING</p>
+        <h1>Lovely things for<br><em>curious hands.</em></h1>
+        <p class="hero-text">Discover special tools, playful molds and thoughtful supplies from China's independent craft scene.</p>
+        <a class="primary-button" href="#shop">Explore the finds <span>↗</span></a>
+        <p class="hero-note">Small discoveries. Big creative energy.</p>
+      </div>
+      <div class="hero-art">
+        <div class="hero-image-wrap">
+          <img src="https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1100&q=85" alt="A warm craft workspace with creative materials">
+        </div>
+        <span class="art-sticker">made for<br>makers ♡</span>
+        <span class="art-caption">TOOLS · MATERIALS · LITTLE TREASURES</span>
+      </div>
+    </section>
+
+    <section class="intro-strip" id="about">
+      <span class="strip-flower">✳</span>
+      <p>We look beyond the usual shopping lists to find the independent makers, clever tools and creative details worth sharing.</p>
+      <span class="strip-sign">— China Craft Finds</span>
+    </section>
+
+    <section class="shop-section" id="shop">
+      <div class="section-heading">
+        <div><p class="eyebrow">THE LITTLE SHOP</p><h2>Find your next <em>favourite.</em></h2></div>
+        <p class="section-side-note">Every item is sourced on request.<br>Availability and shipping are confirmed after you order.</p>
+      </div>
+      <div class="shop-toolbar">
+        <div id="categories" class="category-list"><button class="category-chip selected" data-category="All">All finds</button></div>
+        <label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="Search the finds…"></label>
+      </div>
+      <div id="product-grid" class="product-grid">
+        <div class="loading-state">Gathering lovely finds…</div>
+      </div>
+      <p class="empty-state hidden" id="empty-products">No finds here just yet. Please check back soon.</p>
+    </section>
+
+    <section class="how-section" id="how">
+      <div class="how-title"><p class="eyebrow">A SIMPLE LITTLE PROCESS</p><h2>From China,<br><em>with care.</em></h2></div>
+      <div class="steps">
+        <article><span>01</span><h3>Choose your finds</h3><p>Add the items and variations you’re interested in to your bag.</p></article>
+        <article><span>02</span><h3>Send your request</h3><p>Submit your delivery details. No payment is taken at this stage.</p></article>
+        <article><span>03</span><h3>We confirm the details</h3><p>We check availability, sourcing costs and international shipping, then contact you with the final amount.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer><a class="brand footer-brand" href="#"><span class="brand-mark">✿</span><span>China Craft Finds<small>MADE TO INSPIRE</small></span></a><p>Independent craft discoveries from China.</p><span>© <span id="year"></span> China Craft Finds</span></footer>
+
+  <div class="drawer-backdrop hidden" id="drawer-backdrop"></div>
+  <aside class="cart-drawer" id="cart-drawer" aria-label="Shopping bag" aria-hidden="true">
+    <div class="drawer-head"><div><p class="eyebrow">YOUR SELECTION</p><h2>Your bag <span id="drawer-count">(0)</span></h2></div><button class="icon-button" id="close-cart" aria-label="Close bag">×</button></div>
+    <div id="cart-lines" class="cart-lines"><p class="muted">Your bag is waiting for a little something.</p></div>
+    <div class="drawer-bottom">
+      <div class="subtotal-row"><span>Estimated item subtotal</span><strong id="cart-subtotal">$0.00</strong></div>
+      <p class="fine-print">Shipping and final sourcing costs are confirmed after we receive your request. This is not a payment checkout.</p>
+      <button class="primary-button full-width" id="go-checkout">Continue to request <span>→</span></button>
+    </div>
+  </aside>
+
+  <section class="checkout-modal hidden" id="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
+    <div class="modal-card">
+      <div class="modal-head"><div><p class="eyebrow">ALMOST THERE</p><h2 id="checkout-title">Send your request</h2></div><button class="icon-button" id="close-checkout" aria-label="Close">×</button></div>
+      <p class="muted modal-intro">Please enter your delivery details. You will not be charged on this website.</p>
+      <form id="order-form" class="order-form">
+        <div class="form-grid">
+          <label>Full name *<input name="full_name" required maxlength="120" autocomplete="name"></label>
+          <label>Email address *<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
+          <label>Phone number *<input name="phone" required maxlength="40" autocomplete="tel"></label>
+          <label>Country / region *<input name="country" required maxlength="80" autocomplete="country-name"></label>
+          <label>State / province<input name="region" maxlength="100" autocomplete="address-level1"></label>
+          <label>ZIP / postal code *<input name="postal_code" required maxlength="24" autocomplete="postal-code"></label>
+        </div>
+        <label>Street address *<textarea name="address" required maxlength="500" rows="3" autocomplete="street-address"></textarea></label>
+        <label>Order notes <textarea name="notes" maxlength="1000" rows="2" placeholder="Optional: colour preferences, questions…"></textarea></label>
+        <div class="checkout-total"><span>Estimated item subtotal</span><strong id="checkout-subtotal">$0.00</strong></div>
+        <p class="fine-print">By submitting, you are requesting a quote, not making a purchase. We will confirm availability, fees and shipping before asking for payment.</p>
+        <button class="primary-button full-width" id="submit-order" type="submit">Submit order request <span>→</span></button>
+        <p class="form-error hidden" id="order-error"></p>
+      </form>
+      <div class="success-panel hidden" id="order-success"><span class="success-flower">✿</span><h3>Your request is on its way!</h3><p>Keep this order number for reference:</p><strong id="success-number"></strong><p class="muted">We’ll review your request and contact you about availability and the final quote.</p><button class="secondary-button" id="finish-order">Back to the shop</button></div>
+    </div>
+  </section>
+
+  <section class="admin-page hidden" id="admin-page">
+    <div class="admin-wrap">
+      <div class="admin-top"><a class="brand" href="#"><span class="brand-mark">✿</span><span>China Craft Finds<small>ADMIN STUDIO</small></span></a><button class="secondary-button" id="admin-logout">Log out</button></div>
+      <div id="admin-login-panel" class="admin-panel narrow">
+        <p class="eyebrow">PRIVATE WORKSPACE</p><h1>Welcome back.</h1><p class="muted">Sign in with the administrator account you created in Supabase.</p>
+        <form id="admin-login-form" class="order-form"><label>Email<input name="email" type="email" required></label><label>Password<input name="password" type="password" required></label><button class="primary-button full-width">Sign in</button><p id="login-error" class="form-error hidden"></p></form>
+      </div>
+      <div id="admin-dashboard" class="hidden">
+        <div class="admin-heading"><div><p class="eyebrow">YOUR LITTLE SHOP</p><h1>Admin studio</h1></div><button class="primary-button" id="show-add-product">+ Add a product</button></div>
+        <div class="admin-tabs"><button class="admin-tab active" data-tab="orders">Orders</button><button class="admin-tab" data-tab="products">Products</button></div>
+        <section id="admin-orders" class="admin-panel"><h2>Order requests</h2><div id="orders-list" class="table-wrap">Loading orders…</div></section>
+        <section id="admin-products" class="admin-panel hidden"><h2>Product catalogue</h2><div id="admin-products-list" class="table-wrap">Loading products…</div></section>
+        <section id="product-editor" class="admin-panel hidden">
+          <div class="modal-head"><h2 id="product-editor-title">Add a product</h2><button class="icon-button" id="cancel-product-editor">×</button></div>
+          <form id="product-form" class="order-form">
+            <input type="hidden" name="product_id">
+            <label>Product name *<input name="name" required maxlength="160"></label>
+            <label>Description<textarea name="description" rows="3" maxlength="1200"></textarea></label>
+            <div class="form-grid"><label>Category *<input name="category" required maxlength="80" placeholder="Resin supplies"></label><label>Image URL<input name="image_url" type="url" placeholder="https://…"></label></div>
+            <label>SKU variations *<textarea name="skus" required rows="5" placeholder="SKU code | Variation name | Price in USD&#10;PINK-01 | Pink | 4.50&#10;BLUE-01 | Blue | 4.50"></textarea></label>
+            <p class="fine-print">Enter one variation per line: SKU code | Variation name | price in USD. When editing, replace the variation list with the complete list you want to keep.</p>
+            <label class="check-label"><input type="checkbox" name="active" checked> Visible in the shop</label>
+            <button class="primary-button full-width">Save product</button><p id="product-error" class="form-error hidden"></p>
+          </form>
+        </section>
+      </div>
+    </div>
+  </section>
+  <button class="admin-shortcut" id="admin-shortcut" title="Admin sign in">Admin</button>
+  <div class="toast hidden" id="toast" role="status"></div>
+</body>
+</html>
