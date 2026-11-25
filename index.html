@@ -9,132 +9,339 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="app.js"></script>
 </head>
 <body>
-  <div class="announcement">Thoughtful craft finds, sourced from China ✦</div>
+  <div class="announcement">Thoughtful craft finds, sourced from China</div>
   <header class="site-header">
-    <a class="brand" href="#"><span class="brand-mark">✿</span><span>China Craft Finds<small>MADE TO INSPIRE</small></span></a>
-    <nav><a href="#shop">Shop</a><a href="#about">Our story</a><a href="#how">How it works</a></nav>
-    <button class="cart-button" id="open-cart">Bag <span id="cart-count">0</span></button>
+    <a class="brand" href="#home"><span class="brand-mark">✿</span><span>China Craft Finds<small>MADE TO INSPIRE</small></span></a>
+    <nav>
+      <a href="#shop">Shop</a>
+      <a href="#guide">Before you buy</a>
+      <a href="#account" id="account-link">Sign in</a>
+    </nav>
+    <button class="cart-button" type="button" data-action="open-cart">Bag <span id="cart-count">0</span></button>
   </header>
 
-  <main>
+  <div id="view-home">
     <section class="hero">
       <div class="hero-copy">
         <p class="eyebrow">A LITTLE WORLD OF MAKING</p>
         <h1>Lovely things for<br><em>curious hands.</em></h1>
         <p class="hero-text">Discover special tools, playful molds and thoughtful supplies from China's independent craft scene.</p>
-        <a class="primary-button" href="#shop">Explore the finds <span>↗</span></a>
+        <div class="hero-actions">
+          <a class="primary-button" href="#shop">Explore the finds</a>
+          <a class="secondary-button" href="#guide">Before you buy</a>
+        </div>
         <p class="hero-note">Small discoveries. Big creative energy.</p>
       </div>
       <div class="hero-art">
         <div class="hero-image-wrap">
-          <img src="https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1100&q=85" alt="A warm craft workspace with creative materials">
+          <img src="https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1400&q=85" alt="A warm craft workspace with creative materials">
         </div>
-        <span class="art-sticker">made for<br>makers ♡</span>
-        <span class="art-caption">TOOLS · MATERIALS · LITTLE TREASURES</span>
+        <span class="art-caption">Tools · materials · little treasures</span>
       </div>
     </section>
-
-    <section class="intro-strip" id="about">
+    <section class="intro-strip">
       <span class="strip-flower">✳</span>
       <p>We look beyond the usual shopping lists to find the independent makers, clever tools and creative details worth sharing.</p>
       <span class="strip-sign">— China Craft Finds</span>
     </section>
+    <section class="shop-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">Just in</p><h2>The latest <em>six.</em></h2></div>
+        <p class="section-side-note"><a class="quiet-link" href="#shop">See the whole shop</a></p>
+      </div>
+      <div id="home-grid" class="product-grid"><div class="loading-state">Gathering lovely finds…</div></div>
+    </section>
+    <section class="how-section">
+      <div class="how-title"><p class="eyebrow">A SIMPLE LITTLE PROCESS</p><h2>From China,<br><em>with care.</em></h2></div>
+      <div class="steps">
+        <article><span>01</span><h3>Choose your finds</h3><p>Type the numbers you want. They go into your bag together, sorted by name and then by number.</p></article>
+        <article><span>02</span><h3>Send your request</h3><p>Leave your delivery details. Nothing is charged on this website.</p></article>
+        <article><span>03</span><h3>Goods first, postage later</h3><p>I confirm the items and the amount for the goods. Postage is weighed only after everything has arrived and been packed.</p></article>
+      </div>
+    </section>
+  </div>
 
-    <section class="shop-section" id="shop">
+  <div id="view-shop" class="hidden">
+    <section class="shop-section">
       <div class="section-heading">
         <div><p class="eyebrow">THE LITTLE SHOP</p><h2>Find your next <em>favourite.</em></h2></div>
         <p class="section-side-note">Every item is sourced on request.<br>Availability and shipping are confirmed after you order.</p>
       </div>
       <div class="shop-toolbar">
-        <div id="categories" class="category-list"><button class="category-chip selected" data-category="All">All finds</button></div>
+        <div>
+          <div id="categories" class="category-list"></div>
+          <div id="subcategories" class="category-list child-list hidden"></div>
+        </div>
         <label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="Search the finds…"></label>
       </div>
-      <div id="product-grid" class="product-grid">
-        <div class="loading-state">Gathering lovely finds…</div>
-      </div>
+      <p class="fine-print">Open a piece and type several numbers at once, like <strong>4 5 7 9</strong>. The bag keeps each product’s numbers in order.</p>
+      <div id="product-grid" class="product-grid"><div class="loading-state">Gathering lovely finds…</div></div>
       <p class="empty-state hidden" id="empty-products">No finds here just yet. Please check back soon.</p>
     </section>
+  </div>
 
-    <section class="how-section" id="how">
-      <div class="how-title"><p class="eyebrow">A SIMPLE LITTLE PROCESS</p><h2>From China,<br><em>with care.</em></h2></div>
-      <div class="steps">
-        <article><span>01</span><h3>Choose your finds</h3><p>Add the items and variations you’re interested in to your bag.</p></article>
-        <article><span>02</span><h3>Send your request</h3><p>Submit your delivery details. No payment is taken at this stage.</p></article>
-        <article><span>03</span><h3>We confirm the details</h3><p>We check availability, sourcing costs and international shipping, then contact you with the final amount.</p></article>
+  <div id="view-guide" class="hidden">
+    <article class="page-pad guide">
+      <div class="page-narrow">
+        <p class="eyebrow">BEFORE YOU BUY</p>
+        <h2>A little note before you shop.</h2>
+        <p>Hello~ this is how an order travels, who I am, and a few things I hope you will know first. Take your time (´▽`ʃ♡ƪ)</p>
+
+        <section>
+          <h2>How an order moves</h2>
+          <ol class="guide-steps">
+            <li class="guide-step"><span>01</span><h3>You send a request here</h3><p>Nothing is charged yet, I promise. Your bag is only a little list of what you would like me to look for. ♡</p></li>
+            <li class="guide-step"><span>02</span><h3>I check and quote the goods</h3><p>I look at each piece and see whether it can still be bought, then add the service fee and write to you with the amount for the goods.</p></li>
+            <li class="guide-step"><span>03</span><h3>You pay for the goods</h3><p>Payment happens off this website, after you have seen the quote. I never ask for card details here.</p></li>
+            <li class="guide-step"><span>04</span><h3>I buy them</h3><p>I order from the original shops. Little tools often come from several different sellers — that is just how this kind of hunt goes (•‿•)</p></li>
+            <li class="guide-step"><span>05</span><h3>The parcels arrive with me</h3><p>I film the unboxing and check for anything missing or sent wrong. If a shop made a mistake, I talk to them myself, so you are not left waiting on a parcel that crossed the ocean and still came up short.</p></li>
+            <li class="guide-step"><span>06</span><h3>I pack and measure postage</h3><p>Only when everything is here can I weigh and measure one parcel. Weight, size and your country all change the price, so I truly cannot name a shipping figure in advance. I pack as soon as the full order is in my hands.</p></li>
+            <li class="guide-step"><span>07</span><h3>You pay the postage</h3><p>You will see the amount on the order once I have entered it. Until then it gently says “pending calculation”.</p></li>
+            <li class="guide-step"><span>08</span><h3>I post it</h3><p>Once the postage is paid, I will send the parcel within five days. After it leaves my hands, customs and the carrier’s timetable are outside what I can promise.</p></li>
+          </ol>
+        </section>
+
+        <section>
+          <h2>Who I am</h2>
+          <p>I’m a girl from China, and I have been making things with my hands for thirteen years. Perler beads, clay, resin, beading, weaving, wire wrapping — I have played with all of those, and plenty of other little crafts besides. I wanted to share the creative tools I genuinely find useful with makers all over the world, so their hands can work a little more easily and a little more happily. That is why I opened this small buying-for-you service. ♡</p>
+          <p>I am one person, buying things on your behalf. I am not a professional buying company, I do not make these products, and I am not the original shop. Please think of me as a craft friend who goes and fetches things.</p>
+          <p>If you are not sure how to use something, I am happy to explain it simply. What I cannot do — even though I wish I could — is undo what happens afterwards. If a piece is fragile, if a tool is damaged because it was used the wrong way, or if the result is not what you hoped for, that sits outside what I can put right. I am sorry about that in advance.</p>
+          <p>A lot of craft tools are consumable. A silicone mold lasts longer if you brush on a little mold release and unmold with a gentle hand, but it will still wear out one day. That is the nature of the tool, not a fault in your order.</p>
+        </section>
+
+        <section>
+          <h2>What the service fee is for</h2>
+          <p>The fee is not a surprise extra. It covers a few real costs of doing this by hand:</p>
+          <ul>
+            <li>The fee PayPal charges on the payment.</li>
+            <li>Changing currency, and the cost of withdrawing it.</li>
+            <li>Postage from each original shop to me. The parts are often tiny and come from more than one seller. Opening them takes time: I record the unboxing, check that nothing was missed or sent wrong, and sort it out with the shop myself, so you do not spend weeks waiting on an overseas parcel that is missing something.</li>
+          </ul>
+          <p class="muted">The prices you see on a product are item estimates only. The quote for the goods includes the service fee. International postage is a separate amount, later.</p>
+        </section>
+
+        <section>
+          <h2>If you saw something else</h2>
+          <p>If there is a craft tool, a piece of jewellery, or any small object you would like — something you saw on TikTok, or anywhere else — please tell me. I will go and look. If I can find a listing I trust, I can buy that for you too. ♡</p>
+        </section>
+
+        <section>
+          <h2>Please also know</h2>
+          <ul>
+            <li>Colours on a screen, and the colours of handmade things, can differ a little from the photograph. I hope you will be kind about that small gap.</li>
+            <li>Once I have purchased the goods, the request generally cannot be cancelled. Please be sure before you pay — I will wait.</li>
+            <li>While a request is still “pending review”, you can cancel it yourself from your account. After I have started reviewing it, that button closes, because the work has already begun.</li>
+            <li>Fragile things can still crack on a long trip, even when I pack with care. I will do my best. I cannot promise every piece arrives unmarked.</li>
+            <li>When the goods have arrived with me, I will ask you to confirm the address. If it stays unconfirmed, I will not pack or post — not to be strict, but so nothing goes to the wrong door. Please glance at the city, street and postal code.</li>
+            <li>I keep your delivery details only so I can fulfil the order.</li>
+            <li>I cannot guarantee customs clearance, duties, or how long the carrier takes. If your country charges duties, those are yours to pay. I am sorry I cannot take that part on for you.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>If this is not for you</h2>
+          <p>If any of the above does not feel right, please choose another way to shop. I mean that warmly. People like different kinds of buying, and I respect that choice completely.</p>
+          <p class="muted">Thank you for reading this before you ask me to buy something. It means a lot. ♡</p>
+        </section>
+      </div>
+    </article>
+  </div>
+
+  <div id="view-account" class="hidden">
+    <section class="page-pad">
+      <div id="account-out" class="admin-panel narrow">
+        <form id="account-auth-form" class="order-form auth-form">
+          <p class="eyebrow">YOUR ACCOUNT</p>
+          <h2 class="auth-title">Welcome back.</h2>
+          <p class="muted auth-lead">Sign in to see your orders, or register with your email and a password.</p>
+          <label>Email<input name="email" type="email" required autocomplete="email"></label>
+          <label>Password<input name="password" type="password" required minlength="6" autocomplete="current-password"></label>
+          <button class="primary-button full-width" type="submit">Sign in</button>
+          <button class="linkish" type="button" data-action="toggle-auth">Need an account? Register</button>
+          <p class="form-error hidden"></p>
+        </form>
+      </div>
+      <div id="account-in" class="page-narrow hidden">
+        <p class="eyebrow">PERSONAL CENTRE</p>
+        <div class="record-top">
+          <h2 class="auth-title">Your orders.</h2>
+          <button type="button" class="secondary-button" data-action="logout">Log out</button>
+        </div>
+        <p class="muted">Signed in as <span id="account-email"></span>. Date, order code, how many pieces, the listed item total, and where things stand.</p>
+        <p class="form-error hidden" id="account-error"></p>
+        <div id="account-orders"></div>
       </div>
     </section>
-  </main>
+  </div>
 
-  <footer><a class="brand footer-brand" href="#"><span class="brand-mark">✿</span><span>China Craft Finds<small>MADE TO INSPIRE</small></span></a><p>Independent craft discoveries from China.</p><span>© <span id="year"></span> China Craft Finds</span></footer>
+  <div id="view-order" class="hidden">
+    <section class="page-pad"><div id="order-root"></div></section>
+  </div>
 
-  <div class="drawer-backdrop hidden" id="drawer-backdrop"></div>
+  <footer>
+    <a class="brand footer-brand" href="#home"><span class="brand-mark">✿</span><span>China Craft Finds<small>MADE TO INSPIRE</small></span></a>
+    <p>Independent craft discoveries from China.</p>
+    <span><a class="admin-foot" href="#admin">Admin</a> · © <span id="year"></span> China Craft Finds</span>
+  </footer>
+
+  <div class="drawer-backdrop hidden" id="drawer-backdrop" data-action="close-cart"></div>
   <aside class="cart-drawer" id="cart-drawer" aria-label="Shopping bag" aria-hidden="true">
-    <div class="drawer-head"><div><p class="eyebrow">YOUR SELECTION</p><h2>Your bag <span id="drawer-count">(0)</span></h2></div><button class="icon-button" id="close-cart" aria-label="Close bag">×</button></div>
+    <div class="drawer-head">
+      <div><p class="eyebrow">YOUR SELECTION</p><h2>Your bag <span id="drawer-count">(0)</span></h2></div>
+      <button class="icon-button" type="button" data-action="close-cart" aria-label="Close bag">×</button>
+    </div>
     <div id="cart-lines" class="cart-lines"><p class="muted">Your bag is waiting for a little something.</p></div>
     <div class="drawer-bottom">
       <div class="subtotal-row"><span>Estimated item subtotal</span><strong id="cart-subtotal">$0.00</strong></div>
-      <p class="fine-print">Shipping and final sourcing costs are confirmed after we receive your request. This is not a payment checkout.</p>
-      <button class="primary-button full-width" id="go-checkout">Continue to request <span>→</span></button>
+      <p class="fine-print">Grouped by product name, then by number. Shipping and the service fee are confirmed after your request. Nothing is charged on this site.</p>
+      <button class="primary-button full-width" type="button" data-action="go-checkout">Continue to request <span>→</span></button>
     </div>
   </aside>
 
   <section class="checkout-modal hidden" id="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
     <div class="modal-card">
-      <div class="modal-head"><div><p class="eyebrow">ALMOST THERE</p><h2 id="checkout-title">Send your request</h2></div><button class="icon-button" id="close-checkout" aria-label="Close">×</button></div>
-      <p class="muted modal-intro">Please enter your delivery details. You will not be charged on this website.</p>
-      <form id="order-form" class="order-form">
-        <div class="form-grid">
-          <label>Full name *<input name="full_name" required maxlength="120" autocomplete="name"></label>
-          <label>Email address *<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
-          <label>Phone number *<input name="phone" required maxlength="40" autocomplete="tel"></label>
+      <div class="modal-head">
+        <div><p class="eyebrow" id="checkout-kicker">Almost there</p><h2 id="checkout-title">Send your request</h2></div>
+        <button class="icon-button" type="button" data-action="close-checkout" aria-label="Close">×</button>
+      </div>
+      <div id="checkout-auth">
+        <p class="muted modal-intro">Sign in, or create an account with your email, so this request stays in your order history.</p>
+        <button class="primary-button" type="button" data-action="need-auth">Sign in or register</button>
+      </div>
+      <div id="checkout-form-wrap" class="hidden">
+        <p class="muted modal-intro">Please enter the delivery details. You will not be charged on this website.</p>
+        <form id="order-form" class="order-form">
+          <div class="form-grid">
+            <label>Full name *<input name="full_name" required maxlength="120" autocomplete="name"></label>
+            <label>Email address *<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
+            <label>Phone number *<input name="phone" required maxlength="40" autocomplete="tel"></label>
+          </div>
           <label>Country / region *<input name="country" required maxlength="80" autocomplete="country-name"></label>
           <label>State / province<input name="region" maxlength="100" autocomplete="address-level1"></label>
-          <label>ZIP / postal code *<input name="postal_code" required maxlength="24" autocomplete="postal-code"></label>
+          <label>Street address *<textarea name="address" required maxlength="500" rows="3" autocomplete="street-address"></textarea></label>
+          <div class="form-grid">
+            <label>City *<input name="city" required maxlength="80" autocomplete="address-level2"></label>
+            <label>ZIP / postal code *<input name="postal_code" required maxlength="24" autocomplete="postal-code"></label>
+          </div>
+          <label>Order notes<textarea name="notes" maxlength="1000" rows="2" placeholder="Optional: colour preferences, questions…"></textarea></label>
+          <div class="checkout-total"><span>Estimated item subtotal</span><strong id="checkout-subtotal">$0.00</strong></div>
+          <p class="fine-print">By submitting, you are requesting a quote, not making a purchase. Lines are saved in name order, then number order.</p>
+          <button class="primary-button full-width" id="submit-order" type="submit">Submit order request</button>
+          <p class="form-error hidden" id="order-error"></p>
+        </form>
+      </div>
+      <div class="success-panel hidden" id="order-success">
+        <span class="success-flower">✿</span>
+        <p>I will check whether these can be bought, then write to you about availability and the amount for the goods. Nothing has been charged.</p>
+        <p class="eyebrow">Order number</p>
+        <strong id="success-number"></strong>
+        <div class="success-actions">
+          <a class="secondary-button" href="#shop">Back to the shop</a>
+          <a class="primary-button" id="view-order-link" href="#account">View this order</a>
         </div>
-        <label>Street address *<textarea name="address" required maxlength="500" rows="3" autocomplete="street-address"></textarea></label>
-        <label>Order notes <textarea name="notes" maxlength="1000" rows="2" placeholder="Optional: colour preferences, questions…"></textarea></label>
-        <div class="checkout-total"><span>Estimated item subtotal</span><strong id="checkout-subtotal">$0.00</strong></div>
-        <p class="fine-print">By submitting, you are requesting a quote, not making a purchase. We will confirm availability, fees and shipping before asking for payment.</p>
-        <button class="primary-button full-width" id="submit-order" type="submit">Submit order request <span>→</span></button>
-        <p class="form-error hidden" id="order-error"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="checkout-modal hidden" id="picker" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><p class="eyebrow">TYPE THE NUMBERS</p><h2 id="picker-title">Choose numbers</h2></div>
+        <button class="icon-button" type="button" data-action="close-picker" aria-label="Close">×</button>
+      </div>
+      <p class="muted modal-intro">Separate numbers with spaces. For example: 4 5 7 9. You can also tap the numbers below.</p>
+      <div id="picker-available" class="chips"></div>
+      <form id="picker-form" class="order-form">
+        <label>Numbers<input id="picker-input" autocomplete="off" placeholder="4 5 7 9"></label>
+        <button class="primary-button full-width" type="submit">Add these to the bag</button>
+        <p class="form-error hidden" id="picker-error"></p>
       </form>
-      <div class="success-panel hidden" id="order-success"><span class="success-flower">✿</span><h3>Your request is on its way!</h3><p>Keep this order number for reference:</p><strong id="success-number"></strong><p class="muted">We’ll review your request and contact you about availability and the final quote.</p><button class="secondary-button" id="finish-order">Back to the shop</button></div>
     </div>
   </section>
 
   <section class="admin-page hidden" id="admin-page">
     <div class="admin-wrap">
-      <div class="admin-top"><a class="brand" href="#"><span class="brand-mark">✿</span><span>China Craft Finds<small>ADMIN STUDIO</small></span></a><button class="secondary-button" id="admin-logout">Log out</button></div>
-      <div id="admin-login-panel" class="admin-panel narrow">
-        <p class="eyebrow">PRIVATE WORKSPACE</p><h1>Welcome back.</h1><p class="muted">Sign in with the administrator account you created in Supabase.</p>
-        <form id="admin-login-form" class="order-form"><label>Email<input name="email" type="email" required></label><label>Password<input name="password" type="password" required></label><button class="primary-button full-width">Sign in</button><p id="login-error" class="form-error hidden"></p></form>
+      <div class="admin-top">
+        <a class="brand" href="#home"><span class="brand-mark">✿</span><span>China Craft Finds<small>ADMIN STUDIO</small></span></a>
+        <div class="row-actions">
+          <a class="secondary-button" href="#home">Back to site</a>
+          <button class="secondary-button hidden" id="admin-logout" type="button" data-action="logout">Log out</button>
+        </div>
+      </div>
+      <div id="admin-guest" class="admin-panel narrow">
+        <form id="admin-auth-form" class="order-form auth-form">
+          <p class="eyebrow">PRIVATE WORKSPACE</p>
+          <h2 class="auth-title">Welcome back.</h2>
+          <p class="muted auth-lead">Sign in with the shopkeeper account you created in Supabase.</p>
+          <label>Email<input name="email" type="email" required autocomplete="username"></label>
+          <label>Password<input name="password" type="password" required minlength="6" autocomplete="current-password"></label>
+          <button class="primary-button full-width" type="submit">Sign in</button>
+          <button class="linkish" type="button" data-action="toggle-auth">Need an account? Register</button>
+          <p class="form-error hidden"></p>
+        </form>
+      </div>
+      <div id="admin-denied" class="admin-panel narrow hidden">
+        <p class="eyebrow">PRIVATE WORKSPACE</p>
+        <h2 class="auth-title">This account is not the shopkeeper.</h2>
+        <p class="muted">You are signed in as <strong id="admin-denied-email"></strong>. Add that user’s id to <code>admin_users</code> in Supabase, then refresh. The steps are in the README.</p>
       </div>
       <div id="admin-dashboard" class="hidden">
-        <div class="admin-heading"><div><p class="eyebrow">YOUR LITTLE SHOP</p><h1>Admin studio</h1></div><button class="primary-button" id="show-add-product">+ Add a product</button></div>
-        <div class="admin-tabs"><button class="admin-tab active" data-tab="orders">Orders</button><button class="admin-tab" data-tab="products">Products</button></div>
-        <section id="admin-orders" class="admin-panel"><h2>Order requests</h2><div id="orders-list" class="table-wrap">Loading orders…</div></section>
-        <section id="admin-products" class="admin-panel hidden"><h2>Product catalogue</h2><div id="admin-products-list" class="table-wrap">Loading products…</div></section>
+        <div class="admin-heading"><div><p class="eyebrow">YOUR LITTLE SHOP</p><h2 class="auth-title">Admin studio</h2></div></div>
+        <div class="admin-tabs">
+          <button class="admin-tab active" type="button" data-action="admin-tab" data-tab="orders">Orders</button>
+          <button class="admin-tab" type="button" data-action="admin-tab" data-tab="products">Products</button>
+          <button class="admin-tab" type="button" data-action="admin-tab" data-tab="alerts">Alerts</button>
+        </div>
+        <section id="admin-orders" class="admin-panel">
+          <h2>Order requests</h2>
+          <div id="orders-list" class="table-wrap">Loading orders…</div>
+          <div id="admin-order-detail" class="hidden"></div>
+        </section>
+        <section id="admin-products" class="admin-panel hidden">
+          <div class="record-top"><h2>Product catalogue</h2><button class="primary-button" type="button" data-action="add-product">+ Add a product</button></div>
+          <div id="admin-products-list" class="table-wrap">Loading products…</div>
+        </section>
         <section id="product-editor" class="admin-panel hidden">
-          <div class="modal-head"><h2 id="product-editor-title">Add a product</h2><button class="icon-button" id="cancel-product-editor">×</button></div>
+          <div class="modal-head"><h2 id="product-editor-title">Add a product</h2><button class="icon-button" type="button" data-action="cancel-editor" aria-label="Close">×</button></div>
           <form id="product-form" class="order-form">
             <input type="hidden" name="product_id">
             <label>Product name *<input name="name" required maxlength="160"></label>
             <label>Description<textarea name="description" rows="3" maxlength="1200"></textarea></label>
-            <div class="form-grid"><label>Category *<input name="category" required maxlength="80" placeholder="Resin supplies"></label><label>Image URL<input name="image_url" type="url" placeholder="https://…"></label></div>
-            <label>SKU variations *<textarea name="skus" required rows="5" placeholder="SKU code | Variation name | Price in USD&#10;PINK-01 | Pink | 4.50&#10;BLUE-01 | Blue | 4.50"></textarea></label>
-            <p class="fine-print">Enter one variation per line: SKU code | Variation name | price in USD. When editing, replace the variation list with the complete list you want to keep.</p>
+            <div class="form-grid">
+              <label>Main category *<input name="parent_category" required maxlength="80" placeholder="Clay tools"></label>
+              <label>Subcategory *<input name="category" required maxlength="80" placeholder="Body molds"></label>
+            </div>
+            <label>Image URL<input name="image_url" type="url" placeholder="https://…"></label>
+            <label>SKU variations *<textarea name="skus" required rows="6" placeholder="Number | SKU code | Variation name | Price in USD | Image URL (optional)&#10;4 | PETAL-4 | Five-petal blossom | 4.80&#10;17 | PETAL-17 | Blush garden rose | 6.90 | https://…"></textarea></label>
+            <p class="fine-print">One variation per line. The number is what customers type. When you edit, the lines you leave out are hidden, not deleted, so old orders can still be added back to a bag.</p>
             <label class="check-label"><input type="checkbox" name="active" checked> Visible in the shop</label>
-            <button class="primary-button full-width">Save product</button><p id="product-error" class="form-error hidden"></p>
+            <button class="primary-button full-width" type="submit">Save product</button>
+            <p class="form-error hidden"></p>
+          </form>
+        </section>
+        <section id="admin-alerts" class="admin-panel hidden">
+          <h2>New-order alert</h2>
+          <p class="muted">When someone sends a request, this tries to email you. A failed email never blocks their order.</p>
+          <form id="settings-form" class="order-form">
+            <label>Your email<input id="settings-email" type="email" placeholder="you@example.com" autocomplete="email"></label>
+            <label>Webhook URL<input id="settings-webhook" type="url" placeholder="https://ntfy.sh/your-long-secret-topic"></label>
+            <p class="fine-print">Easiest path: open ntfy.sh, subscribe to a long random topic nobody can guess, turn on email for that topic, and paste https://ntfy.sh/that-topic here together with your email. Save, then send a test. If you leave the webhook empty and only fill the email, the first message from FormSubmit is a confirmation link — open it once.</p>
+            <div class="row-actions">
+              <button class="primary-button" type="submit">Save alerts</button>
+              <button class="secondary-button" type="button" data-action="test-alert">Send a test</button>
+            </div>
+            <p class="form-error hidden"></p>
           </form>
         </section>
       </div>
     </div>
   </section>
-  <button class="admin-shortcut" id="admin-shortcut" title="Admin sign in">Admin</button>
+  <a class="admin-shortcut" href="#admin">Admin</a>
   <div class="toast hidden" id="toast" role="status"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>');</script>
+  <script src="app.js"></script>
 </body>
 </html>
