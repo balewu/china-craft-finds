@@ -301,6 +301,11 @@ declare
   v_qty integer;
   v_lines text := '';
   v_summary text;
+  v_fee integer := 0;
+  v_kinds integer := 0;
+  v_pieces integer := 0;
+  v_stores integer := 0;
+  v_checks integer := 0;
 begin
   if auth.uid() is null then
     raise exception 'Please sign in before sending a request.';
@@ -361,19 +366,33 @@ begin
     v_lines := v_lines || v_sku.product_name || ' #' || v_sku.label_no || ' × ' || v_qty || E'\n';
   end loop;
 
-  update public.orders set total_cents = v_total where id = v_order_id;
+  select count(*)::int,
+         coalesce(sum(oi.quantity), 0)::int,
+         count(distinct coalesce(nullif(lower(btrim(ps.source_shop)), ''), 'product:' || p.id::text))::int,
+         count(*) filter (where coalesce(ps.needs_verify, false))::int
+    into v_kinds, v_pieces, v_stores, v_checks
+  from public.order_items oi
+  join public.skus s on s.id = oi.sku_id
+  join public.products p on p.id = s.product_id
+  left join public.product_sourcing ps on ps.product_id = p.id
+  where oi.order_id = v_order_id;
+
+  v_fee := public.service_fee_cents(v_kinds, v_pieces, v_stores, v_checks);
+  update public.orders set total_cents = v_total, service_fee_cents = v_fee where id = v_order_id;
 
   v_summary := '新订单 ' || v_order_number || E'\n'
     || btrim(p_customer->>'full_name') || ' <' || btrim(p_customer->>'email') || '>' || E'\n'
     || v_lines
-    || '商品小计 $' || to_char(v_total / 100.0, 'FM999990.00');
+    || '商品小计 $' || to_char(v_total / 100.0, 'FM999990.00') || E'\n'
+    || '服务费 $' || to_char(v_fee / 100.0, 'FM999990.00') || E'\n'
+    || '货款合计 $' || to_char((v_total + v_fee) / 100.0, 'FM999990.00');
   begin
     perform public.queue_shop_alert(v_summary);
   exception when others then
     null;
   end;
 
-  return jsonb_build_object('order_number', v_order_number, 'total_cents', v_total);
+  return jsonb_build_object('order_number', v_order_number, 'total_cents', v_total, 'service_fee_cents', v_fee);
 end;
 $$;
 
@@ -496,3 +515,255 @@ revoke insert, delete on public.orders from authenticated;
 revoke insert, update, delete on public.order_items from authenticated;
 revoke insert, update, delete on public.admin_users from anon, authenticated;
 revoke insert, delete on public.shop_settings from authenticated;
+
+-- 评价：只有已发货订单可以写。默认不公开，管理员点 Share 后才出现在反馈页和商品详情里。
+-- 顾客看不到别人的账号。公开内容走 list_public_reviews，不返回用户 id。
+
+create table if not exists public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  order_id uuid not null references public.orders(id) on delete cascade,
+  order_item_id uuid references public.order_items(id) on delete cascade,
+  product_id uuid references public.products(id) on delete set null,
+  product_name text not null default '',
+  label_no text not null default '',
+  variant_name text not null default '',
+  image_url text,
+  body text not null,
+  is_public boolean not null default false,
+  created_at timestamptz not null default now(),
+  constraint reviews_body_len check (char_length(btrim(body)) between 2 and 1000)
+);
+
+create unique index if not exists reviews_order_once
+  on public.reviews (order_id) where order_item_id is null;
+create unique index if not exists reviews_item_once
+  on public.reviews (order_item_id) where order_item_id is not null;
+create index if not exists reviews_public_idx on public.reviews (is_public, created_at desc);
+
+alter table public.reviews enable row level security;
+
+drop policy if exists "Customers read own reviews" on public.reviews;
+create policy "Customers read own reviews" on public.reviews
+for select to authenticated using (user_id = auth.uid() or public.is_store_admin());
+
+drop policy if exists "Admins update reviews" on public.reviews;
+create policy "Admins update reviews" on public.reviews
+for update to authenticated using (public.is_store_admin()) with check (public.is_store_admin());
+
+drop policy if exists "Admins delete reviews" on public.reviews;
+create policy "Admins delete reviews" on public.reviews
+for delete to authenticated using (public.is_store_admin());
+
+drop policy if exists "Admins delete orders" on public.orders;
+create policy "Admins delete orders" on public.orders
+for delete to authenticated using (public.is_store_admin());
+
+drop policy if exists "Admins delete order items" on public.order_items;
+create policy "Admins delete order items" on public.order_items
+for delete to authenticated using (public.is_store_admin());
+
+create or replace function public.submit_review(p_order_number text, p_item_id uuid, p_body text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders%rowtype;
+  v_item public.order_items%rowtype;
+  v_body text := btrim(coalesce(p_body, ''));
+  v_id uuid;
+  v_product uuid;
+  v_image text;
+begin
+  if auth.uid() is null then
+    raise exception 'Please sign in.';
+  end if;
+  if char_length(v_body) < 2 or char_length(v_body) > 1000 then
+    raise exception 'Please write a short note, between 2 and 1000 characters.';
+  end if;
+
+  select * into v_order from public.orders
+  where order_number = p_order_number and user_id = auth.uid();
+  if not found then
+    raise exception 'This order is not available.';
+  end if;
+  if v_order.status <> 'shipped' then
+    raise exception 'You can leave a note after the parcel has been posted.';
+  end if;
+
+  if p_item_id is null then
+    insert into public.reviews (user_id, order_id, body)
+    values (auth.uid(), v_order.id, v_body)
+    on conflict (order_id) where order_item_id is null
+    do update set body = excluded.body, is_public = false, created_at = now()
+    returning id into v_id;
+  else
+    select * into v_item from public.order_items
+    where id = p_item_id and order_id = v_order.id;
+    if not found then
+      raise exception 'That piece is not in this order.';
+    end if;
+    select s.product_id, coalesce(v_item.image_url, s.image_url, p.image_url)
+      into v_product, v_image
+    from public.skus s
+    left join public.products p on p.id = s.product_id
+    where s.id = v_item.sku_id;
+
+    insert into public.reviews (
+      user_id, order_id, order_item_id, product_id, product_name, label_no, variant_name, image_url, body
+    ) values (
+      auth.uid(), v_order.id, v_item.id, v_product, v_item.product_name,
+      coalesce(nullif(btrim(v_item.label_no), ''), v_item.sku_code),
+      v_item.variant_name, v_image, v_body
+    )
+    on conflict (order_item_id) where order_item_id is not null
+    do update set
+      body = excluded.body,
+      is_public = false,
+      created_at = now(),
+      product_id = excluded.product_id,
+      product_name = excluded.product_name,
+      label_no = excluded.label_no,
+      variant_name = excluded.variant_name,
+      image_url = excluded.image_url
+    returning id into v_id;
+  end if;
+
+  return jsonb_build_object('id', v_id);
+end;
+$$;
+
+create or replace function public.list_public_reviews()
+returns table (
+  id uuid,
+  body text,
+  created_at timestamptz,
+  product_name text,
+  label_no text,
+  variant_name text,
+  image_url text,
+  product_id uuid,
+  is_product boolean
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select r.id, r.body, r.created_at, r.product_name, r.label_no, r.variant_name, r.image_url, r.product_id,
+         (r.order_item_id is not null) as is_product
+  from public.reviews r
+  where r.is_public
+  order by r.created_at desc
+  limit 300;
+$$;
+
+revoke all on function public.submit_review(text, uuid, text) from public, anon;
+grant execute on function public.submit_review(text, uuid, text) to authenticated;
+revoke all on function public.list_public_reviews() from public;
+grant execute on function public.list_public_reviews() to anon, authenticated;
+
+revoke all on public.reviews from anon;
+grant select, update, delete on public.reviews to authenticated;
+revoke insert on public.reviews from anon, authenticated;
+grant delete on public.orders to authenticated;
+grant delete on public.order_items to authenticated;
+
+-- 来源店铺、是否详细核验：单独一张表，顾客的查询读不到。
+-- 服务费在数据库里计算，不信任浏览器传来的数字。
+-- 服务费 = ceil_to_0.50( max(20, 12*店铺数 + 2.5*max(0, 种类数-店铺数) + 0.5*min(20, 件数-种类数) + 8*需核验种类数) / 6.5 )
+-- 每个 SKU 是一个种类。店铺名忽略大小写；没填店铺的商品各自算一家，避免少算。
+
+create table if not exists public.product_sourcing (
+  product_id uuid primary key references public.products(id) on delete cascade,
+  source_shop text not null default '',
+  needs_verify boolean not null default false
+);
+
+alter table public.product_sourcing enable row level security;
+
+drop policy if exists "Admins manage sourcing" on public.product_sourcing;
+create policy "Admins manage sourcing" on public.product_sourcing
+for all to authenticated using (public.is_store_admin()) with check (public.is_store_admin());
+
+revoke all on public.product_sourcing from anon, authenticated;
+grant select, insert, update, delete on public.product_sourcing to authenticated;
+
+alter table public.orders add column if not exists service_fee_cents integer;
+update public.orders set service_fee_cents = 0 where service_fee_cents is null;
+alter table public.orders alter column service_fee_cents set default 0;
+alter table public.orders alter column service_fee_cents set not null;
+alter table public.orders drop constraint if exists orders_service_fee_cents_check;
+alter table public.orders add constraint orders_service_fee_cents_check check (service_fee_cents >= 0);
+
+create or replace function public.service_fee_cents(p_kinds integer, p_pieces integer, p_stores integer, p_checks integer)
+returns integer
+language sql
+immutable
+as $$
+  select case
+    when coalesce(p_kinds, 0) <= 0 then 0
+    else (
+      (
+        greatest(40,
+          24 * greatest(p_stores, 0)
+          + 5 * greatest(0, p_kinds - greatest(p_stores, 0))
+          + least(20, greatest(0, coalesce(p_pieces, 0) - p_kinds))
+          + 16 * greatest(p_checks, 0)
+        ) * 2 + 12
+      ) / 13
+    ) * 50
+  end;
+$$;
+
+create or replace function public.quote_service_fee(p_items jsonb)
+returns integer
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_kinds integer := 0;
+  v_pieces integer := 0;
+  v_stores integer := 0;
+  v_checks integer := 0;
+begin
+  if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) < 1 then
+    return 0;
+  end if;
+  if jsonb_array_length(p_items) > 30 then
+    raise exception 'Your bag must contain between 1 and 30 item lines.';
+  end if;
+
+  with lines as (
+    select (value->>'sku_id')::uuid as sku_id,
+           sum(least(50, greatest(1, (value->>'quantity')::int)))::int as qty
+    from jsonb_array_elements(p_items)
+    group by 1
+  ),
+  joined as (
+    select l.qty,
+           coalesce(nullif(lower(btrim(ps.source_shop)), ''), 'product:' || p.id::text) as shop_key,
+           coalesce(ps.needs_verify, false) as needs_verify
+    from lines l
+    join public.skus s on s.id = l.sku_id and s.active = true
+    join public.products p on p.id = s.product_id and p.active = true
+    left join public.product_sourcing ps on ps.product_id = p.id
+  )
+  select count(*)::int,
+         coalesce(sum(qty), 0)::int,
+         count(distinct shop_key)::int,
+         count(*) filter (where needs_verify)::int
+    into v_kinds, v_pieces, v_stores, v_checks
+  from joined;
+
+  return public.service_fee_cents(v_kinds, v_pieces, v_stores, v_checks);
+end;
+$$;
+
+revoke all on function public.service_fee_cents(integer, integer, integer, integer) from public, anon, authenticated;
+revoke all on function public.quote_service_fee(jsonb) from public;
+grant execute on function public.quote_service_fee(jsonb) to anon, authenticated;

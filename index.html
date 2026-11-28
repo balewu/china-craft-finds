@@ -17,6 +17,7 @@
     <nav>
       <a href="#shop">Shop</a>
       <a href="#guide">Before you buy</a>
+      <a href="#feedback">Feedback</a>
       <a href="#account" id="account-link">Sign in</a>
     </nav>
     <button class="cart-button" type="button" data-action="open-cart">Bag <span id="cart-count">0</span></button>
@@ -58,7 +59,7 @@
       <div class="steps">
         <article><span>01</span><h3>Choose your finds</h3><p>Type the numbers you want. They go into your bag together, sorted by name and then by number.</p></article>
         <article><span>02</span><h3>Send your request</h3><p>Leave your delivery details. Nothing is charged on this website.</p></article>
-        <article><span>03</span><h3>Goods first, postage later</h3><p>I confirm the items and the amount for the goods. Postage is weighed only after everything has arrived and been packed.</p></article>
+        <article><span>03</span><h3>Goods first, postage later</h3><p>Your bag shows the item total and a service fee. I still confirm the goods. Postage is weighed only after everything has arrived and been packed.</p></article>
       </div>
     </section>
   </div>
@@ -149,6 +150,17 @@
     </article>
   </div>
 
+  <div id="view-feedback" class="hidden">
+    <article class="page-pad">
+      <div class="page-narrow">
+        <p class="eyebrow">KIND NOTES</p>
+        <h2 class="auth-title">From other hands.</h2>
+        <p class="muted">Names stay private. These are notes I chose to share, written after a parcel was already on its way.</p>
+        <div id="feedback-root"><p class="muted">Gathering notes…</p></div>
+      </div>
+    </article>
+  </div>
+
   <div id="view-account" class="hidden">
     <section class="page-pad">
       <div id="account-out" class="admin-panel narrow">
@@ -169,7 +181,7 @@
           <h2 class="auth-title">Your orders.</h2>
           <button type="button" class="secondary-button" data-action="logout">Log out</button>
         </div>
-        <p class="muted">Signed in as <span id="account-email"></span>. Date, order code, how many pieces, the listed item total, and where things stand.</p>
+        <p class="muted">Signed in as <span id="account-email"></span>. Date, order code, pieces, item subtotal, service fee, and where things stand.</p>
         <p class="form-error hidden" id="account-error"></p>
         <div id="account-orders"></div>
       </div>
@@ -194,8 +206,10 @@
     </div>
     <div id="cart-lines" class="cart-lines"><p class="muted">Your bag is waiting for a little something.</p></div>
     <div class="drawer-bottom">
-      <div class="subtotal-row"><span>Estimated item subtotal</span><strong id="cart-subtotal">$0.00</strong></div>
-      <p class="fine-print">Grouped by product name, then by number. Shipping and the service fee are confirmed after your request. Nothing is charged on this site.</p>
+      <div class="subtotal-row"><span>Item subtotal</span><strong id="cart-subtotal">$0.00</strong></div>
+      <div class="subtotal-row"><span>Service fee</span><strong id="cart-fee">$0.00</strong></div>
+      <div class="subtotal-row grand"><span>Estimated total</span><strong id="cart-grand">$0.00</strong></div>
+      <p class="fine-print">Grouped by product name, then by number. The service fee is counted with this bag. Postage is weighed later. Nothing is charged on this site.</p>
       <button class="primary-button full-width" type="button" data-action="go-checkout">Continue to request <span>→</span></button>
     </div>
   </aside>
@@ -226,8 +240,10 @@
             <label>ZIP / postal code *<input name="postal_code" required maxlength="24" autocomplete="postal-code"></label>
           </div>
           <label>Order notes<textarea name="notes" maxlength="1000" rows="2" placeholder="Optional: colour preferences, questions…"></textarea></label>
-          <div class="checkout-total"><span>Estimated item subtotal</span><strong id="checkout-subtotal">$0.00</strong></div>
-          <p class="fine-print">By submitting, you are requesting a quote, not making a purchase. Lines are saved in name order, then number order.</p>
+          <div class="checkout-total"><span>Item subtotal</span><strong id="checkout-subtotal">$0.00</strong></div>
+          <div class="checkout-total"><span>Service fee</span><strong id="checkout-fee">$0.00</strong></div>
+          <div class="checkout-total grand"><span>Estimated total</span><strong id="checkout-grand">$0.00</strong></div>
+          <p class="fine-print">By submitting, you are requesting a quote, not making a purchase. The service fee is saved with the order. Postage comes later.</p>
           <button class="primary-button full-width" id="submit-order" type="submit">Submit order request</button>
           <p class="form-error hidden" id="order-error"></p>
         </form>
@@ -246,20 +262,37 @@
   </section>
 
   <section class="checkout-modal hidden" id="picker" role="dialog" aria-modal="true" aria-labelledby="picker-title">
-    <div class="modal-card">
+    <div class="modal-card detail-card">
       <div class="modal-head">
-        <div><p class="eyebrow">TYPE THE NUMBERS</p><h2 id="picker-title">Choose numbers</h2></div>
+        <div>
+          <p class="eyebrow" id="detail-kicker">THE PIECE</p>
+          <h2 id="picker-title">Choose numbers</h2>
+          <p id="detail-price" class="detail-price"></p>
+        </div>
         <button class="icon-button" type="button" data-action="close-picker" aria-label="Close">×</button>
       </div>
-      <p class="muted modal-intro">Separate numbers with spaces. For example: 4 5 7 9. You can also tap the numbers below.</p>
-      <div id="picker-available" class="chips"></div>
+      <button type="button" class="detail-photo" id="detail-zoom" data-action="zoom" data-src="">
+        <img id="detail-image" alt="">
+      </button>
+      <p id="detail-description" class="detail-copy"></p>
+      <h3 class="group-name">The numbers</h3>
+      <p class="muted">Tap a row to choose it, or type several numbers at once. Tap a little picture to see it larger.</p>
+      <div id="picker-available" class="sku-list"></div>
       <form id="picker-form" class="order-form">
         <label>Numbers<input id="picker-input" autocomplete="off" placeholder="4 5 7 9"></label>
         <button class="primary-button full-width" type="submit">Add these to the bag</button>
         <p class="form-error hidden" id="picker-error"></p>
       </form>
+      <h3 class="group-name">Kind notes</h3>
+      <div id="detail-reviews"><p class="muted">No shared notes for this piece yet.</p></div>
     </div>
   </section>
+
+  <div class="lightbox hidden" id="lightbox" role="dialog" aria-modal="true" aria-label="Full image">
+    <button type="button" class="lightbox-backdrop" data-action="close-zoom" aria-label="Close"></button>
+    <img id="zoom-img" alt="">
+    <button type="button" class="icon-button lightbox-close" data-action="close-zoom" aria-label="Close">×</button>
+  </div>
 
   <section class="admin-page hidden" id="admin-page">
     <div class="admin-wrap">
@@ -292,6 +325,7 @@
         <div class="admin-tabs">
           <button class="admin-tab active" type="button" data-action="admin-tab" data-tab="orders">Orders</button>
           <button class="admin-tab" type="button" data-action="admin-tab" data-tab="products">Products</button>
+          <button class="admin-tab" type="button" data-action="admin-tab" data-tab="reviews">Notes</button>
           <button class="admin-tab" type="button" data-action="admin-tab" data-tab="alerts">Alerts</button>
         </div>
         <section id="admin-orders" class="admin-panel">
@@ -301,6 +335,11 @@
         </section>
         <section id="admin-products" class="admin-panel hidden">
           <div class="record-top"><h2>Product catalogue</h2><button class="primary-button" type="button" data-action="add-product">+ Add a product</button></div>
+          <div class="admin-filters">
+            <div id="admin-categories" class="category-list"></div>
+            <div id="admin-subcategories" class="category-list child-list"></div>
+            <label class="search-box"><span>⌕</span><input id="admin-search" type="search" placeholder="Search name or number…"></label>
+          </div>
           <div id="admin-products-list" class="table-wrap">Loading products…</div>
         </section>
         <section id="product-editor" class="admin-panel hidden">
@@ -313,6 +352,9 @@
               <label>Main category *<input name="parent_category" required maxlength="80" placeholder="Clay tools"></label>
               <label>Subcategory *<input name="category" required maxlength="80" placeholder="Body molds"></label>
             </div>
+            <label>Source shop *<input name="source_shop" required maxlength="120" placeholder="The original shop’s name" autocomplete="off"></label>
+            <label class="check-label"><input type="checkbox" name="needs_verify"> Needs a detailed check video</label>
+            <p class="fine-print">Customers never see the shop name or this tick. Spell a shop the same way each time so those pieces count as one shop. Each number in the bag is one kind. A ticked piece adds a check for every number of it in the bag.</p>
             <label>Image URL<input name="image_url" type="url" placeholder="https://…"></label>
             <label>SKU variations *<textarea name="skus" required rows="6" placeholder="Number | SKU code | Variation name | Price in USD | Image URL (optional)&#10;4 | PETAL-4 | Five-petal blossom | 4.80&#10;17 | PETAL-17 | Blush garden rose | 6.90 | https://…"></textarea></label>
             <p class="fine-print">One variation per line. The number is what customers type. When you edit, the lines you leave out are hidden, not deleted, so old orders can still be added back to a bag.</p>
@@ -321,13 +363,18 @@
             <p class="form-error hidden"></p>
           </form>
         </section>
+        <section id="admin-reviews" class="admin-panel hidden">
+          <h2>Notes to share</h2>
+          <p class="muted">Customers can write after an order is marked Shipped. Nothing here is public until you press Share. Names are never shown.</p>
+          <div id="admin-reviews-list">Loading notes…</div>
+        </section>
         <section id="admin-alerts" class="admin-panel hidden">
           <h2>New-order alert</h2>
           <p class="muted">When someone sends a request, this tries to email you. A failed email never blocks their order.</p>
           <form id="settings-form" class="order-form">
             <label>Your email<input id="settings-email" type="email" placeholder="you@example.com" autocomplete="email"></label>
             <label>Webhook URL<input id="settings-webhook" type="url" placeholder="https://ntfy.sh/your-long-secret-topic"></label>
-            <p class="fine-print">Easiest path: open ntfy.sh, subscribe to a long random topic nobody can guess, turn on email for that topic, and paste https://ntfy.sh/that-topic here together with your email. Save, then send a test. If you leave the webhook empty and only fill the email, the first message from FormSubmit is a confirmation link — open it once.</p>
+            <p class="fine-print">Free path: put only your email here and leave the webhook empty, then save and send a test. The first message is a confirmation from FormSubmit — open that link once. After that, new orders email you. ntfy is optional and can be left blank. A failed email never blocks the order.</p>
             <div class="row-actions">
               <button class="primary-button" type="submit">Save alerts</button>
               <button class="secondary-button" type="button" data-action="test-alert">Send a test</button>

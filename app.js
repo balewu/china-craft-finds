@@ -34,6 +34,8 @@ let pickerProductId = null;
 let adminTab = "orders";
 let adminOrders = [];
 let adminProducts = [];
+let adminParent = "All";
+let adminChild = "All";
 let resumeCheckout = false;
 const authMode = {};
 
@@ -173,17 +175,118 @@ function visibleProducts() {
   }).sort((a, b) => compareName(a.name, b.name));
 }
 
-function cardHtml(product) {
-  const prices = product.skus.map((sku) => sku.price_cents);
+function serviceFeeCents(kinds, pieces, stores, checks) {
+  if (kinds <= 0) return 0;
+  const half = Math.max(40,
+    24 * Math.max(stores, 0)
+    + 5 * Math.max(0, kinds - Math.max(stores, 0))
+    + Math.min(20, Math.max(0, pieces - kinds))
+    + 16 * Math.max(checks, 0)
+  );
+  return Math.floor((half * 2 + 12) / 13) * 50;
+}
+
+function shopOf(product) {
+  const row = Array.isArray(product?.product_sourcing) ? product.product_sourcing[0] : product?.product_sourcing;
+  return {
+    source_shop: row?.source_shop || product?.source_shop || "",
+    needs_verify: !!(row ? row.needs_verify : product?.needs_verify),
+  };
+}
+
+let quotedFee = 0;
+let feeState = "ready";
+let feeRequest = 0;
+
+function paintFee(subtotal) {
+  const feeText = feeState === "missing" ? "—" : feeState === "loading" ? "…" : money(quotedFee);
+  const grandText = feeState === "ready" ? money(subtotal + quotedFee) : feeText === "…" ? "…" : "—";
+  for (const ids of [
+    ["cart-subtotal", "cart-fee", "cart-grand"],
+    ["checkout-subtotal", "checkout-fee", "checkout-grand"],
+  ]) {
+    const sub = $(ids[0]);
+    const fee = $(ids[1]);
+    const grand = $(ids[2]);
+    if (sub) sub.textContent = money(subtotal);
+    if (fee) fee.textContent = feeText;
+    if (grand) grand.textContent = grandText;
+  }
+}
+
+function demoFee(lines) {
+  const shops = new Set();
+  let checks = 0;
+  let pieces = 0;
+  for (const line of lines) {
+    const name = String(line.product.source_shop || "").trim().toLowerCase();
+    shops.add(name || ("product:" + line.product.id));
+    if (line.product.needs_verify) checks += 1;
+    pieces += line.quantity;
+  }
+  return serviceFeeCents(lines.length, pieces, shops.size, checks);
+}
+
+async function refreshFee() {
+  const lines = sortedCartLines();
+  const subtotal = cartTotal();
+  const request = ++feeRequest;
+  if (!lines.length) {
+    quotedFee = 0;
+    feeState = "ready";
+    paintFee(0);
+    return;
+  }
+  if (!db) {
+    quotedFee = demoFee(lines);
+    feeState = "ready";
+    paintFee(subtotal);
+    return;
+  }
+  feeState = "loading";
+  paintFee(subtotal);
+  const { data, error } = await db.rpc("quote_service_fee", {
+    p_items: lines.map((line) => ({ sku_id: line.sku.id, quantity: line.quantity })),
+  });
+  if (request !== feeRequest) return;
+  if (error) {
+    quotedFee = 0;
+    feeState = "missing";
+  } else {
+    quotedFee = Number(data) || 0;
+    feeState = "ready";
+  }
+  paintFee(cartTotal());
+}
+
+function priceText(cents) {
+  return Number(cents) > 0 ? money(cents) : "To be quoted";
+}
+
+function priceRange(product) {
+  const prices = product.skus.map((sku) => Number(sku.price_cents) || 0);
   const min = Math.min(...prices);
-  const price = min <= 0 ? "To be quoted" : prices.length > 1 ? `From ${money(min)}` : money(min);
+  const max = Math.max(...prices);
+  if (max <= 0) return "To be quoted";
+  if (min === max) return money(min);
+  return `${money(min)} – ${money(max)}`;
+}
+
+function thumbButton(url, label) {
+  const shown = imageOrFallback(url);
+  return `<button type="button" class="thumb-button" data-action="zoom" data-src="${safeText(url || shown)}" aria-label="${safeText(label || "View full image")}"><img src="${safeText(shown)}" alt=""></button>`;
+}
+
+function cardHtml(product) {
   return `<article class="product-card">
-    <div class="product-image"><img loading="lazy" src="${safeText(imageOrFallback(product.image_url))}" alt="${safeText(product.name)}"><span class="product-tag">${safeText(product.category)}</span></div>
+    <div class="product-image">
+      ${thumbButton(product.image_url, product.name)}
+      <span class="product-tag">${safeText(product.category)}</span>
+    </div>
     <div class="product-info">
       <span class="product-category">${safeText(parentName(product))} · ${safeText(product.category)}</span>
-      <h3>${safeText(product.name)}</h3>
-      <p class="product-description">${safeText(product.description || "A little find for your next creative project.")}</p>
-      <div class="product-bottom"><span class="product-price">${price}</span><button type="button" class="add-button" data-action="pick" data-id="${safeText(product.id)}">Choose numbers</button></div>
+      <h3><button type="button" class="text-button" data-action="pick" data-id="${safeText(product.id)}">${safeText(product.name)}</button></h3>
+      <div class="product-bottom"><span class="product-price">${priceRange(product)}</span><button type="button" class="add-button" data-action="pick" data-id="${safeText(product.id)}">View</button></div>
     </div>
   </article>`;
 }
@@ -219,21 +322,17 @@ function renderCart() {
   const count = lines.reduce((sum, line) => sum + line.quantity, 0);
   $("cart-count").textContent = String(count);
   $("drawer-count").textContent = `(${count})`;
-  $("cart-subtotal").textContent = money(cartTotal());
-  const checkoutSubtotal = $("checkout-subtotal");
-  if (checkoutSubtotal) checkoutSubtotal.textContent = money(cartTotal());
   if (!lines.length) {
     $("cart-lines").innerHTML = '<p class="muted">Your bag is waiting for a little something.</p>';
-    return;
-  }
+  } else {
   const groups = groupByName(lines, (line) => line.product.name);
   $("cart-lines").innerHTML = groups.map((group) => {
     const nos = group.lines.map((line) => line.sku.label_no).join(", ");
     const rows = group.lines.map((line) => `<div class="cart-line">
-      <img src="${safeText(imageOrFallback(line.sku.image_url || line.product.image_url))}" alt="">
+      ${thumbButton(line.sku.image_url || line.product.image_url, line.sku.variant_name)}
       <div>
         <h4>#${safeText(line.sku.label_no)} ${safeText(line.sku.variant_name)}</h4>
-        <p>${money(line.sku.price_cents)}</p>
+        <p>${priceText(line.sku.price_cents)}</p>
         <div class="qty-controls">
           <button type="button" data-action="qty-dec" data-sku="${safeText(line.sku.id)}" aria-label="Decrease">−</button>
           <span>${line.quantity}</span>
@@ -244,6 +343,8 @@ function renderCart() {
     </div>`).join("");
     return `<section class="bag-group"><h3>${safeText(group.name)}</h3><p class="nos">${safeText(nos)}</p>${rows}</section>`;
   }).join("");
+  }
+  refreshFee();
 }
 
 function openCart() {
@@ -264,11 +365,18 @@ function openPicker(productId) {
   if (!product) return;
   pickerProductId = productId;
   $("picker-title").textContent = product.name;
+  $("detail-kicker").textContent = `${parentName(product)} · ${product.category}`;
+  $("detail-price").textContent = priceRange(product);
+  $("detail-description").textContent = product.description || "A little find for your next creative project.";
+  const src = imageOrFallback(product.image_url);
+  $("detail-image").src = src;
+  $("detail-image").alt = product.name;
+  $("detail-zoom").dataset.src = product.image_url || src;
   $("picker-input").value = "";
   $("picker-error").classList.add("hidden");
   paintChips();
+  loadDetailReviews(product);
   $("picker").classList.remove("hidden");
-  $("picker-input").focus();
 }
 
 function closePicker() {
@@ -281,7 +389,47 @@ function paintChips() {
   if (!product) return;
   const chosen = new Set(tokens($("picker-input").value).map((token) => token.toLowerCase()));
   const skus = product.skus.slice().sort((a, b) => compareLabel(a.label_no, b.label_no));
-  $("picker-available").innerHTML = skus.map((sku) => `<button type="button" class="${chosen.has(String(sku.label_no).toLowerCase()) ? "on" : ""}" data-action="chip" data-label="${safeText(sku.label_no)}">#${safeText(sku.label_no)} · ${money(sku.price_cents)}</button>`).join("");
+  $("picker-available").innerHTML = skus.map((sku) => {
+    const on = chosen.has(String(sku.label_no).toLowerCase());
+    return `<div class="sku-row ${on ? "on" : ""}">
+      ${thumbButton(sku.image_url || product.image_url, sku.variant_name)}
+      <button type="button" class="sku-main" data-action="chip" data-label="${safeText(sku.label_no)}">
+        <strong>#${safeText(sku.label_no)}</strong>
+        <span>${safeText(sku.variant_name)}</span>
+        <em>${priceText(sku.price_cents)}</em>
+      </button>
+    </div>`;
+  }).join("");
+}
+
+function openZoom(src) {
+  if (!src) return;
+  $("zoom-img").src = src;
+  $("lightbox").classList.remove("hidden");
+}
+
+function closeZoom() {
+  $("lightbox").classList.add("hidden");
+  $("zoom-img").removeAttribute("src");
+}
+
+async function loadDetailReviews(product) {
+  const box = $("detail-reviews");
+  if (!box) return;
+  const wanted = product.id;
+  if (!db) {
+    box.innerHTML = '<p class="muted">No shared notes for this piece yet.</p>';
+    return;
+  }
+  box.innerHTML = '<p class="muted">Looking for notes…</p>';
+  const { data, error } = await db.rpc("list_public_reviews");
+  if (pickerProductId !== wanted) return;
+  if (error) {
+    box.innerHTML = '<p class="muted">Notes will show here after the new database script has been run.</p>';
+    return;
+  }
+  const rows = (data || []).filter((row) => row.is_product && (row.product_id === product.id || row.product_name === product.name));
+  box.innerHTML = rows.length ? rows.map(pieceNote).join("") : '<p class="muted">No shared notes for this piece yet.</p>';
 }
 
 function addTypedNumbers(event) {
@@ -336,6 +484,7 @@ function openCheckout() {
   $("checkout-kicker").textContent = "Almost there";
   $("checkout-title").textContent = "Send your request";
   $("checkout-subtotal").textContent = money(cartTotal());
+  paintFee(cartTotal());
   if (authed) {
     const form = $("order-form");
     if (!form.elements.email.value) form.elements.email.value = currentSession.user.email || "";
@@ -406,12 +555,12 @@ function parseRoute() {
   const parts = raw.split("/").filter(Boolean);
   const name = parts[0] || "home";
   if (name === "order" && parts[1]) return { name: "order", id: decodeURIComponent(parts.slice(1).join("/")) };
-  if (["home", "shop", "guide", "account", "admin"].includes(name)) return { name };
+  if (["home", "shop", "guide", "feedback", "account", "admin"].includes(name)) return { name };
   return { name: "home" };
 }
 
 function showView(name) {
-  for (const view of ["home", "shop", "guide", "account", "order"]) {
+  for (const view of ["home", "shop", "guide", "feedback", "account", "order"]) {
     $("view-" + view).classList.toggle("hidden", view !== name);
   }
 }
@@ -421,10 +570,12 @@ function applyRoute() {
   closeCheckout();
   closePicker();
   closeCart();
+  closeZoom();
   const titles = {
     home: "China Craft Finds — Handmade discoveries from China",
     shop: "Shop — China Craft Finds",
     guide: "Before you buy — China Craft Finds",
+    feedback: "Feedback — China Craft Finds",
     account: "Account — China Craft Finds",
     order: "Order — China Craft Finds",
     admin: "Admin — China Craft Finds",
@@ -439,6 +590,7 @@ function applyRoute() {
   showView(route.name);
   if (route.name === "home") renderHome();
   if (route.name === "shop") renderShop();
+  if (route.name === "feedback") paintFeedback();
   if (route.name === "account") paintAccount();
   if (route.name === "order") paintOrder(route.id);
   window.scrollTo(0, 0);
@@ -505,7 +657,7 @@ async function onAuthSubmit(event) {
       });
       if (error) throw error;
       if (!signed.session) {
-        formError(form, "Check your email and confirm the address, then sign in. To skip that step, turn off Confirm email in Supabase → Authentication → Providers → Email.");
+        formError(form, "Check your email and confirm the address, then sign in. To skip that step, turn off Confirm email under Authentication → Sign In / Providers → Email.");
         return;
       }
       toast("Account created");
@@ -546,10 +698,18 @@ async function loadMyOrders() {
   errorEl.classList.add("hidden");
   if (!db || !currentSession) return;
   box.innerHTML = '<p class="muted">Loading your orders…</p>';
-  const { data, error } = await db.from("orders")
-    .select("id,order_number,created_at,total_cents,status,order_items(quantity)")
+  let { data, error } = await db.from("orders")
+    .select("id,order_number,created_at,total_cents,service_fee_cents,status,order_items(quantity)")
     .eq("user_id", currentSession.user.id)
     .order("created_at", { ascending: false });
+  if (error && /service_fee_cents/.test(error.message || "")) {
+    const again = await db.from("orders")
+      .select("id,order_number,created_at,total_cents,status,order_items(quantity)")
+      .eq("user_id", currentSession.user.id)
+      .order("created_at", { ascending: false });
+    data = (again.data || []).map((order) => ({ ...order, service_fee_cents: 0 }));
+    error = again.error;
+  }
   if (error) {
     errorEl.textContent = error.message;
     errorEl.classList.remove("hidden");
@@ -571,6 +731,7 @@ async function loadMyOrders() {
     <dl class="stat-row">
       <div><dt>Pieces</dt><dd>${pieceCount(order.order_items)}</dd></div>
       <div><dt>Item subtotal</dt><dd>${money(order.total_cents)}</dd></div>
+      <div><dt>Service fee</dt><dd>${money(order.service_fee_cents || 0)}</dd></div>
       <div><dt>Status</dt><dd>${safeText(STATUS_LABEL[order.status] || order.status)}</dd></div>
     </dl>
     <div class="row-actions">
@@ -596,21 +757,52 @@ function addressBlock(order) {
   return `${safeText(order.full_name)}<br>${safeText(order.address)}<br>${safeText(order.city)}${order.region ? ", " + safeText(order.region) : ""} ${safeText(order.postal_code)}<br>${safeText(order.country)}<br>${safeText(order.phone)} · ${safeText(order.email)}`;
 }
 
-function itemsHtml(items, canReorder) {
+function itemsHtml(items, canReorder, reviewCtx) {
   const sorted = sortOrderItems(items);
   const groups = groupByName(sorted, (item) => item.product_name);
   return groups.map((group) => {
     const nos = group.lines.map((item) => item.label_no || item.sku_code).join(", ");
-    const rows = group.lines.map((item) => `<div class="item-row">
-      <img src="${safeText(imageOrFallback(item.image_url))}" alt="">
-      <div>
-        <strong>#${safeText(item.label_no || item.sku_code)}</strong> ${safeText(item.variant_name)}
-        <p class="muted">${safeText(item.sku_code)} · × ${item.quantity} · ${money(item.line_total_cents)}</p>
+    const rows = group.lines.map((item) => `<div class="item-block">
+      <div class="item-row">
+        ${thumbButton(item.image_url, item.variant_name)}
+        <div>
+          <strong>#${safeText(item.label_no || item.sku_code)}</strong> ${safeText(item.variant_name)}
+          <p class="muted">${safeText(item.sku_code)} · × ${item.quantity} · ${money(item.line_total_cents)}</p>
+        </div>
+        ${canReorder ? `<button type="button" class="secondary-button" data-action="reorder" data-sku="${safeText(item.sku_id || "")}" data-product="${safeText(item.product_name)}" data-label="${safeText(item.label_no || item.sku_code)}">Add to bag</button>` : ""}
       </div>
-      ${canReorder ? `<button type="button" class="secondary-button" data-action="reorder" data-sku="${safeText(item.sku_id || "")}" data-product="${safeText(item.product_name)}" data-label="${safeText(item.label_no || item.sku_code)}">Add to bag</button>` : ""}
+      ${itemReviewHtml(item, reviewCtx)}
     </div>`).join("");
     return `<h3 class="group-name">${safeText(group.name)}</h3><p class="nos">${safeText(nos)}</p>${rows}`;
   }).join("");
+}
+
+function itemReviewHtml(item, ctx) {
+  if (!ctx || !ctx.enabled) return "";
+  const existing = (ctx.reviews || []).find((review) => review.order_item_id === item.id);
+  if (existing) {
+    return `<p class="review-mine">Your note: ${safeText(existing.body)}${existing.is_public ? " · shared" : " · only you can see this until I share it"}</p>`;
+  }
+  return `<form class="order-form review-form" data-number="${safeText(ctx.orderNumber)}" data-item="${safeText(item.id)}">
+    <label>A note about this piece<textarea name="body" required minlength="2" maxlength="1000" rows="2" placeholder="How did this one work for you?"></textarea></label>
+    <button class="secondary-button" type="submit">Send this note</button>
+    <p class="form-error hidden"></p>
+  </form>`;
+}
+
+function orderReviewHtml(order, reviews) {
+  if (order.status !== "shipped") return "";
+  const existing = (reviews || []).find((review) => !review.order_item_id);
+  if (existing) {
+    return `<section class="review-block"><h3 class="group-name">Your note on this order</h3><p class="review-mine">${safeText(existing.body)}${existing.is_public ? " · shared" : " · only you can see this until I share it"}</p></section>`;
+  }
+  return `<form class="order-form review-form" data-number="${safeText(order.order_number)}">
+    <h3 class="group-name">A note about this order</h3>
+    <p class="muted">Your name is not shown. I will read it first, and only share it if you are comfortable with that — I decide what appears on the feedback page.</p>
+    <label>Your note<textarea name="body" required minlength="2" maxlength="1000" rows="3" placeholder="How did the order go?"></textarea></label>
+    <button class="secondary-button" type="submit">Send order note</button>
+    <p class="form-error hidden"></p>
+  </form>`;
 }
 
 function statusNote(order) {
@@ -633,7 +825,13 @@ async function paintOrder(orderNumber) {
     return;
   }
   root.innerHTML = '<p class="muted">Opening this order…</p>';
-  const { data, error } = await db.from("orders").select("*, order_items(*)").eq("order_number", orderNumber).maybeSingle();
+  let { data, error } = await db.from("orders").select("*, order_items(*), reviews(id,order_item_id,body,is_public,product_name,label_no,variant_name,image_url)").eq("order_number", orderNumber).maybeSingle();
+  if (error && /review|relationship|schema cache/i.test(error.message || "")) {
+    const again = await db.from("orders").select("*, order_items(*)").eq("order_number", orderNumber).maybeSingle();
+    data = again.data;
+    error = again.error;
+    if (data) data.reviews = [];
+  }
   if (error || !data) {
     root.innerHTML = `<div class="page-narrow"><h2 class="auth-title">This order is not available.</h2><p class="muted">${safeText(error?.message || "Sign in with the account that placed it.")}</p></div>`;
     return;
@@ -660,17 +858,22 @@ async function paintOrder(orderNumber) {
         <p class="form-error hidden"></p>
       </form>`
     : `<div class="address-card">${addressBlock(data)}${data.address_confirmed ? '<p class="muted">Address confirmed.</p>' : ""}</div>`;
+  const reviews = data.reviews || [];
+  const reviewCtx = mine && data.status === "shipped" ? { enabled: true, orderNumber: data.order_number, reviews } : null;
   root.innerHTML = `<div class="page-narrow">
     <p class="eyebrow">ORDER ${safeText(formatWhen(data.created_at))}</p>
     <div class="record-top"><h2 class="auth-title">${safeText(data.order_number)}</h2><span class="status-pill">${safeText(STATUS_LABEL[data.status] || data.status)}</span></div>
     <p class="status-note">${safeText(statusNote(data))}</p>
     ${data.status === "shipped" ? `<p class="tracking">Tracking number: <strong>${safeText(data.tracking_number || "Not added yet")}</strong></p>` : ""}
+    ${mine ? orderReviewHtml(data, reviews) : ""}
     <h3 class="group-name">Deliver to</h3>
     ${confirmForm}
-    ${showPostage ? `<div class="subtotal-row postage-row"><span>Postage</span><strong>${postage === "Pending calculation" ? postage : postage}</strong></div>` : ""}
+    ${showPostage ? `<div class="subtotal-row postage-row"><span>Postage</span><strong>${postage}</strong></div>` : ""}
     <div class="subtotal-row"><span>Item subtotal</span><strong>${money(data.total_cents)}</strong></div>
+    <div class="subtotal-row"><span>Service fee</span><strong>${money(data.service_fee_cents || 0)}</strong></div>
+    <div class="subtotal-row grand"><span>Goods total</span><strong>${money(Number(data.total_cents || 0) + Number(data.service_fee_cents || 0))}</strong></div>
     ${data.notes ? `<p class="muted">Note: ${safeText(data.notes)}</p>` : ""}
-    ${itemsHtml(data.order_items, mine)}
+    ${itemsHtml(data.order_items, mine, reviewCtx)}
     <div class="row-actions">
       <a class="secondary-button" href="#shop">Back to the shop</a>
       ${mine && data.status === "pending_review" ? `<button type="button" class="secondary-button" data-action="cancel-order" data-number="${safeText(data.order_number)}">Cancel request</button>` : ""}
@@ -782,6 +985,7 @@ function switchAdminTab(tab) {
   document.querySelectorAll(".admin-tab").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
   $("admin-orders").classList.toggle("hidden", tab !== "orders");
   $("admin-products").classList.toggle("hidden", tab !== "products");
+  $("admin-reviews").classList.toggle("hidden", tab !== "reviews");
   $("admin-alerts").classList.toggle("hidden", tab !== "alerts");
   $("product-editor").classList.add("hidden");
   $("admin-order-detail").classList.add("hidden");
@@ -792,6 +996,7 @@ function switchAdminTab(tab) {
 function loadAdminTab() {
   if (adminTab === "orders") loadAdminOrders();
   else if (adminTab === "products") loadAdminProducts();
+  else if (adminTab === "reviews") loadAdminReviews();
   else loadSettings();
 }
 
@@ -820,8 +1025,9 @@ async function loadAdminOrders() {
     </div>
     <p class="nos">${safeText(sortOrderItems(order.order_items).map((item) => `${item.product_name} ${item.label_no || item.sku_code}`).join(" · "))}</p>
     <div class="record-top">
-      <strong>${money(order.total_cents)}</strong>
+      <strong>${money(order.total_cents)} + ${money(order.service_fee_cents || 0)} fee</strong>
       <button type="button" class="secondary-button" data-action="open-admin-order" data-id="${safeText(order.id)}">Open</button>
+      <button type="button" class="secondary-button danger" data-action="delete-order" data-id="${safeText(order.id)}">Delete</button>
     </div>
   </article>`).join("");
 }
@@ -835,6 +1041,7 @@ function openAdminOrder(id) {
   const postage = order.shipping_cents === null || order.shipping_cents === undefined ? "" : (order.shipping_cents / 100).toFixed(2);
   detail.innerHTML = `<div class="modal-head"><div><p class="eyebrow">${safeText(formatWhen(order.created_at))}</p><h2>${safeText(order.order_number)}</h2></div><button type="button" class="icon-button" data-action="back-admin-orders" aria-label="Back">×</button></div>
     <p class="muted">${order.address_confirmed ? "The customer has confirmed this address." : "The customer has not confirmed this address yet."}</p>
+    <p class="muted">Item subtotal ${money(order.total_cents)} · Service fee ${money(order.service_fee_cents || 0)} · Goods total ${money(Number(order.total_cents || 0) + Number(order.service_fee_cents || 0))}. Postage is separate.</p>
     ${itemsHtml(order.order_items, false)}
     <form id="admin-order-form" class="order-form" data-id="${safeText(order.id)}">
       <div class="form-grid">
@@ -856,6 +1063,7 @@ function openAdminOrder(id) {
       <label>Notes<textarea name="notes" rows="2">${safeText(order.notes || "")}</textarea></label>
       <p class="fine-print">Marking shipped needs a tracking number. Leave postage blank until you have weighed the parcel — after the customer confirms the address, they see “Pending calculation” until you fill this in.</p>
       <button class="primary-button" type="submit">Save order</button>
+      <button class="secondary-button danger" type="button" data-action="delete-order" data-id="${safeText(order.id)}">Delete this order</button>
       <p class="form-error hidden"></p>
     </form>`;
 }
@@ -913,20 +1121,59 @@ async function saveAdminOrder(event) {
 }
 
 async function loadAdminProducts() {
-  const { data, error } = await db.from("products")
-    .select("id,name,description,category,parent_category,image_url,active,created_at,skus(id,sku_code,label_no,variant_name,price_cents,image_url,active)")
+  let { data, error } = await db.from("products")
+    .select("id,name,description,category,parent_category,image_url,active,created_at,skus(id,sku_code,label_no,variant_name,price_cents,image_url,active),product_sourcing(source_shop,needs_verify)")
     .order("created_at", { ascending: false });
+  if (error && /product_sourcing|relationship|schema cache/i.test(error.message || "")) {
+    const again = await db.from("products")
+      .select("id,name,description,category,parent_category,image_url,active,created_at,skus(id,sku_code,label_no,variant_name,price_cents,image_url,active)")
+      .order("created_at", { ascending: false });
+    data = again.data;
+    error = again.error;
+  }
   if (error) {
     $("admin-products-list").textContent = error.message;
     return;
   }
   adminProducts = data || [];
-  $("admin-products-list").innerHTML = adminProducts.length ? `<table><thead><tr><th>Product</th><th>Categories</th><th>Numbers</th><th></th></tr></thead><tbody>${adminProducts.map((product) => `<tr>
+  renderAdminCatalogue();
+}
+
+function renderAdminCatalogue() {
+  const parents = ["All", ...new Set(adminProducts.map((product) => product.parent_category || "General"))].sort((a, b) => (a === "All" ? -1 : b === "All" ? 1 : compareName(a, b)));
+  $("admin-categories").innerHTML = parents.map((name) => `<button type="button" class="category-chip ${adminParent === name ? "selected" : ""}" data-action="admin-parent" data-value="${safeText(name)}">${name === "All" ? "All groups" : safeText(name)}</button>`).join("");
+  const childWrap = $("admin-subcategories");
+  if (adminParent === "All") {
+    childWrap.classList.add("hidden");
+    childWrap.innerHTML = "";
+  } else {
+    const children = ["All", ...new Set(adminProducts.filter((product) => (product.parent_category || "General") === adminParent).map((product) => product.category))].sort((a, b) => (a === "All" ? -1 : b === "All" ? 1 : compareName(a, b)));
+    childWrap.classList.remove("hidden");
+    childWrap.innerHTML = children.map((name) => `<button type="button" class="category-chip ${adminChild === name ? "selected" : ""}" data-action="admin-child" data-value="${safeText(name)}">${name === "All" ? "All in this group" : safeText(name)}</button>`).join("");
+  }
+  const query = ($("admin-search").value || "").trim().toLowerCase();
+  const list = adminProducts.filter((product) => {
+    if (adminParent !== "All" && (product.parent_category || "General") !== adminParent) return false;
+    if (adminChild !== "All" && product.category !== adminChild) return false;
+    if (!query) return true;
+    const skuText = (product.skus || []).map((sku) => `${sku.label_no} ${sku.sku_code} ${sku.variant_name}`).join(" ");
+    const shop = shopOf(product);
+    return `${product.name} ${product.description || ""} ${product.category} ${product.parent_category || ""} ${shop.source_shop} ${skuText}`.toLowerCase().includes(query);
+  });
+  $("admin-products-list").innerHTML = list.length ? `<table><thead><tr><th></th><th>Product</th><th>Categories</th><th>Shop</th><th>Numbers</th><th></th></tr></thead><tbody>${list.map((product) => {
+    const shop = shopOf(product);
+    return `<tr>
+    <td class="admin-thumb">${thumbButton(product.image_url, product.name)}</td>
     <td><strong>${safeText(product.name)}</strong><br><small>${product.active ? "Visible" : "Hidden"}</small></td>
     <td>${safeText(product.parent_category || "General")} / ${safeText(product.category)}</td>
-    <td>${(product.skus || []).filter((sku) => sku.active !== false).sort((a, b) => compareLabel(a.label_no, b.label_no)).map((sku) => `#${safeText(sku.label_no)} · ${safeText(sku.sku_code)} · ${money(sku.price_cents)}`).join("<br>")}</td>
-    <td><button type="button" class="admin-action" data-action="edit-product" data-id="${safeText(product.id)}">Edit</button></td>
-  </tr>`).join("")}</tbody></table>` : '<p class="muted">No products yet.</p>';
+    <td>${safeText(shop.source_shop || "—")}${shop.needs_verify ? "<br><small>Check video</small>" : ""}</td>
+    <td>${(product.skus || []).filter((sku) => sku.active !== false).sort((a, b) => compareLabel(a.label_no, b.label_no)).map((sku) => `#${safeText(sku.label_no)} · ${safeText(sku.sku_code)} · ${priceText(sku.price_cents)}`).join("<br>")}</td>
+    <td class="row-actions">
+      <button type="button" class="admin-action" data-action="edit-product" data-id="${safeText(product.id)}">Edit</button>
+      <button type="button" class="admin-action danger-text" data-action="delete-product" data-id="${safeText(product.id)}" data-name="${safeText(product.name)}">Delete</button>
+    </td>
+  </tr>`;
+  }).join("")}</tbody></table>` : '<p class="muted">No products in this corner.</p>';
 }
 
 function skuLines(product) {
@@ -953,6 +1200,9 @@ function showProductEditor(product) {
   form.elements.category.value = product.category || "";
   form.elements.image_url.value = product.image_url || "";
   form.elements.skus.value = skuLines(product);
+  const shop = shopOf(product);
+  form.elements.source_shop.value = shop.source_shop;
+  form.elements.needs_verify.checked = shop.needs_verify;
 }
 
 function parseSkuText(text) {
@@ -1030,6 +1280,12 @@ async function saveProduct(event) {
     const { error } = await db.from("skus").update({ active: false }).in("id", hide);
     if (error) return formError(form, error.message);
   }
+  const { error: shopError } = await db.from("product_sourcing").upsert({
+    product_id: productId,
+    source_shop: String(data.get("source_shop") || "").trim(),
+    needs_verify: data.get("needs_verify") === "on",
+  });
+  if (shopError) return formError(form, shopError.message + " Run the new supabase.sql if this mentions product_sourcing.");
   toast("Product saved");
   $("product-editor").classList.add("hidden");
   $("admin-products").classList.remove("hidden");
@@ -1068,10 +1324,148 @@ async function sendTestAlert() {
 function demoProducts() {
   const stamp = (days) => new Date(Date.now() - days * 86400000).toISOString();
   return [
-    { id: "demo-a", name: "Petal mold sheet", description: "Type the shape numbers — for example 4 5 7 9.", parent_category: "Molds", category: "Floral molds", image_url: "https://images.unsplash.com/photo-1493106641515-6b5631de4bb9?auto=format&fit=crop&w=900&q=80", created_at: stamp(0), skus: ["4", "5", "7", "9", "17"].map((n) => ({ id: "demo-a-" + n, sku_code: "PETAL-" + n, label_no: n, variant_name: "Shape " + n, price_cents: 480 + Number(n), image_url: null, active: true })) },
-    { id: "demo-b", name: "Clay texture stamps", description: "A second product, so the bag can group by name.", parent_category: "Clay tools", category: "Texture stamps", image_url: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=900&q=80", created_at: stamp(1), skus: ["1", "2", "6", "10", "17"].map((n) => ({ id: "demo-b-" + n, sku_code: "STAMP-" + n, label_no: n, variant_name: "Stamp " + n, price_cents: 640, image_url: null, active: true })) },
-    { id: "demo-c", name: "Resin craft tool kit", description: "A handy starter selection.", parent_category: "Tools", category: "Resin tools", image_url: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=900&q=80", created_at: stamp(2), skus: [{ id: "demo-c-1", sku_code: "TOOL-SET", label_no: "1", variant_name: "Basic kit", price_cents: 1290, image_url: null, active: true }] },
+    { id: "demo-a", name: "Petal mold sheet", description: "Type the shape numbers — for example 4 5 7 9.", parent_category: "Molds", category: "Floral molds", source_shop: "Petal studio", needs_verify: true, image_url: "https://images.unsplash.com/photo-1493106641515-6b5631de4bb9?auto=format&fit=crop&w=900&q=80", created_at: stamp(0), skus: ["4", "5", "7", "9", "17"].map((n) => ({ id: "demo-a-" + n, sku_code: "PETAL-" + n, label_no: n, variant_name: "Shape " + n, price_cents: 480 + Number(n), image_url: null, active: true })) },
+    { id: "demo-b", name: "Clay texture stamps", description: "A second product, so the bag can group by name.", parent_category: "Clay tools", category: "Texture stamps", source_shop: "Clay room", needs_verify: false, image_url: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=900&q=80", created_at: stamp(1), skus: ["1", "2", "6", "10", "17"].map((n) => ({ id: "demo-b-" + n, sku_code: "STAMP-" + n, label_no: n, variant_name: "Stamp " + n, price_cents: 640, image_url: null, active: true })) },
+    { id: "demo-c", name: "Resin craft tool kit", description: "A handy starter selection.", parent_category: "Tools", category: "Resin tools", source_shop: "Clay room", needs_verify: false, image_url: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=900&q=80", created_at: stamp(2), skus: [{ id: "demo-c-1", sku_code: "TOOL-SET", label_no: "1", variant_name: "Basic kit", price_cents: 1290, image_url: null, active: true }] },
   ];
+}
+
+function pieceNote(row) {
+  return `<article class="record note-card">
+    <div class="note-piece">
+      ${thumbButton(row.image_url, row.variant_name || row.product_name)}
+      <div>
+        <h3>${safeText(row.product_name || "A piece")}</h3>
+        <p class="nos">#${safeText(row.label_no || "")} ${safeText(row.variant_name || "")}</p>
+      </div>
+    </div>
+    <p>${safeText(row.body)}</p>
+    <p class="muted">${safeText(formatWhen(row.created_at))} · from a customer</p>
+  </article>`;
+}
+
+function orderNote(row) {
+  return `<article class="record note-card">
+    <p>${safeText(row.body)}</p>
+    <p class="muted">${safeText(formatWhen(row.created_at))} · from a customer</p>
+  </article>`;
+}
+
+async function paintFeedback() {
+  const root = $("feedback-root");
+  if (!db) {
+    root.innerHTML = '<p class="empty-note">Notes will appear here once the shop is connected.</p>';
+    return;
+  }
+  root.innerHTML = '<p class="muted">Gathering notes…</p>';
+  const { data, error } = await db.rpc("list_public_reviews");
+  if (error) {
+    root.innerHTML = `<p class="form-error">${safeText(error.message)} Run the new supabase.sql in the Supabase SQL editor, then refresh.</p>`;
+    return;
+  }
+  const rows = data || [];
+  if (!rows.length) {
+    root.innerHTML = '<p class="empty-note">No shared notes yet.</p>';
+    return;
+  }
+  const orders = rows.filter((row) => !row.is_product);
+  const pieces = rows.filter((row) => row.is_product);
+  const block = (title, html) => `<section class="note-section"><h2>${title}</h2>${html || '<p class="muted">None shared yet.</p>'}</section>`;
+  root.innerHTML = block("About the orders", orders.map(orderNote).join("")) + block("About the pieces", pieces.map(pieceNote).join(""));
+}
+
+async function submitReview(event) {
+  event.preventDefault();
+  const form = event.target;
+  formError(form, "");
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  try {
+    const { error } = await db.rpc("submit_review", {
+      p_order_number: form.dataset.number,
+      p_item_id: form.dataset.item || null,
+      p_body: String(new FormData(form).get("body") || "").trim(),
+    });
+    if (error) throw error;
+    toast("Note saved. Only you can see it until I choose to share it.");
+    paintOrder(form.dataset.number);
+  } catch (err) {
+    formError(form, err.message || "Could not save that note.");
+    button.disabled = false;
+  }
+}
+
+async function loadAdminReviews() {
+  const box = $("admin-reviews-list");
+  const { data, error } = await db.from("reviews")
+    .select("id,body,is_public,created_at,product_name,label_no,variant_name,image_url,order_item_id")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) {
+    box.textContent = error.message;
+    return;
+  }
+  if (!data?.length) {
+    box.innerHTML = '<p class="muted">No notes yet.</p>';
+    return;
+  }
+  box.innerHTML = data.map((row) => `<article class="record note-card">
+    <div class="record-top">
+      <p class="eyebrow">${row.order_item_id ? "Piece" : "Order"} · ${safeText(formatWhen(row.created_at))}</p>
+      <span class="status-pill">${row.is_public ? "Shared" : "Private"}</span>
+    </div>
+    ${row.order_item_id ? `<div class="note-piece">${thumbButton(row.image_url, row.variant_name)}<div><h3>${safeText(row.product_name)}</h3><p class="nos">#${safeText(row.label_no)} ${safeText(row.variant_name)}</p></div></div>` : ""}
+    <p>${safeText(row.body)}</p>
+    <div class="row-actions">
+      <button type="button" class="secondary-button" data-action="toggle-review" data-id="${safeText(row.id)}" data-public="${row.is_public ? "1" : "0"}">${row.is_public ? "Hide" : "Share"}</button>
+      <button type="button" class="secondary-button danger" data-action="delete-review" data-id="${safeText(row.id)}">Delete</button>
+    </div>
+  </article>`).join("");
+}
+
+async function deleteAdminOrder(order) {
+  const label = STATUS_LABEL[order.status] || order.status;
+  if (!confirm(`Delete this order?\n\n${order.order_number}\nStatus: ${label}\n\nThis cannot be undone.`)) return;
+  const { error } = await db.from("orders").delete().eq("id", order.id);
+  if (error) {
+    toast(error.message);
+    return;
+  }
+  toast("Order deleted");
+  $("admin-order-detail").classList.add("hidden");
+  $("orders-list").classList.remove("hidden");
+  loadAdminOrders();
+}
+
+async function deleteAdminProduct(id, name) {
+  if (!confirm(`Delete this product?\n\n${name}\n\nIts numbers will be removed. This cannot be undone.`)) return;
+  const { error } = await db.from("products").delete().eq("id", id);
+  if (error) {
+    toast(error.message);
+    return;
+  }
+  toast("Product deleted");
+  loadAdminProducts();
+  loadShop();
+}
+
+async function toggleReview(id, makePublic) {
+  const { error } = await db.from("reviews").update({ is_public: makePublic }).eq("id", id);
+  if (error) toast(error.message);
+  else {
+    toast(makePublic ? "This note is now shared" : "This note is hidden");
+    loadAdminReviews();
+  }
+}
+
+async function deleteReview(id) {
+  if (!confirm("Delete this note?\n\nThis cannot be undone.")) return;
+  const { error } = await db.from("reviews").delete().eq("id", id);
+  if (error) toast(error.message);
+  else {
+    toast("Note deleted");
+    loadAdminReviews();
+  }
 }
 
 function onClick(event) {
@@ -1111,7 +1505,20 @@ function onClick(event) {
   } else if (action === "child") {
     activeChild = button.dataset.value;
     renderShop();
-  } else if (action === "toggle-auth") toggleAuth(button.closest("form"));
+  } else if (action === "admin-parent") {
+    adminParent = button.dataset.value;
+    adminChild = "All";
+    renderAdminCatalogue();
+  } else if (action === "admin-child") {
+    adminChild = button.dataset.value;
+    renderAdminCatalogue();
+  } else if (action === "delete-product") deleteAdminProduct(button.dataset.id, button.dataset.name);
+  else if (action === "delete-order") {
+    const order = adminOrders.find((item) => item.id === button.dataset.id);
+    if (order) deleteAdminOrder(order);
+  } else if (action === "toggle-review") toggleReview(button.dataset.id, button.dataset.public !== "1");
+  else if (action === "delete-review") deleteReview(button.dataset.id);
+  else if (action === "toggle-auth") toggleAuth(button.closest("form"));
   else if (action === "need-auth") {
     resumeCheckout = true;
     closeCheckout();
@@ -1119,6 +1526,8 @@ function onClick(event) {
   } else if (action === "cancel-order") cancelOrder(button.dataset.number);
   else if (action === "reorder") reorder(button);
   else if (action === "close-picker") closePicker();
+  else if (action === "zoom") openZoom(button.dataset.src);
+  else if (action === "close-zoom") closeZoom();
   else if (action === "admin-tab") switchAdminTab(button.dataset.tab);
   else if (action === "edit-product") showProductEditor(adminProducts.find((product) => product.id === button.dataset.id));
   else if (action === "add-product") showProductEditor(null);
@@ -1143,6 +1552,7 @@ function onSubmit(event) {
   else if (form.id === "product-form") saveProduct(event);
   else if (form.id === "admin-order-form") saveAdminOrder(event);
   else if (form.id === "settings-form") saveSettings(event);
+  else if (form.classList.contains("review-form")) submitReview(event);
 }
 
 function init() {
@@ -1150,10 +1560,14 @@ function init() {
   document.addEventListener("click", onClick);
   document.addEventListener("submit", onSubmit);
   $("search").addEventListener("input", renderShop);
+  $("admin-search").addEventListener("input", () => {
+    if (adminProducts.length || adminTab === "products") renderAdminCatalogue();
+  });
   $("picker-input").addEventListener("input", paintChips);
   window.addEventListener("hashchange", applyRoute);
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    if (!$("lightbox").classList.contains("hidden")) return closeZoom();
     if (!$("picker").classList.contains("hidden")) return closePicker();
     if (!$("checkout-modal").classList.contains("hidden")) return closeCheckout();
     closeCart();
